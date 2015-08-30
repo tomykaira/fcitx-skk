@@ -390,6 +390,19 @@ boolean FcitxSkkInputModeMenuAction(struct _FcitxUIMenu *menu, int index)
     return true;
 }
 
+static void _skk_hide_input_mode(void* arg)
+{
+    FcitxInstance *instance = arg;
+    FcitxInputState* input = FcitxInstanceGetInputState(instance);
+    if (FcitxMessagesIsMessageChanged(FcitxInputStateGetAuxUp(input))
+        || FcitxMessagesIsMessageChanged(FcitxInputStateGetAuxDown(input))
+        || FcitxMessagesGetMessageCount(FcitxInputStateGetPreedit(input))
+        || FcitxMessagesGetMessageCount(FcitxInputStateGetClientPreedit(input))
+        || FcitxCandidateWordGetListSize(FcitxInputStateGetCandidateList(input)))
+        return;
+    FcitxUICloseInputWindow(instance);
+}
+
 void FcitxSkkUpdateInputMode(FcitxSkk* skk)
 {
     SkkInputMode mode = skk_context_get_input_mode(skk->context);
@@ -397,6 +410,13 @@ void FcitxSkkUpdateInputMode(FcitxSkk* skk)
                            "skk-input-mode",
                            _(input_mode_status[mode].label),
                            _(input_mode_status[mode].description));
+    FcitxInputState *input = FcitxInstanceGetInputState(skk->owner);
+    FcitxMessagesAddMessageStringsAtLast(FcitxInputStateGetAuxUp(input),
+                                         MSG_TIPS,
+                                         _(input_mode_status[mode].label));
+    FcitxUIUpdateInputWindow(skk->owner);
+    if (!FcitxInstanceCheckTimeoutByFunc(skk->owner, _skk_hide_input_mode))
+        FcitxInstanceAddTimeout(skk->owner, 1000, _skk_hide_input_mode, skk->owner);
 }
 
 static void  _skk_input_mode_changed_cb                (GObject    *gobject,
@@ -549,6 +569,8 @@ FcitxSkkDoInputReal(void *arg, FcitxKeySym sym, unsigned int state)
     }
 
     SkkModifierType modifiers = (SkkModifierType) state & (FcitxKeyState_SimpleMask | (1 << 30));
+    if (modifiers & SKK_MODIFIER_TYPE_META_MASK)
+        return IRV_TO_PROCESS;
     SkkKeyEvent* key = skk_key_event_new_from_x_keysym(sym, modifiers, NULL);
     if (!key)
         return IRV_TO_PROCESS;
